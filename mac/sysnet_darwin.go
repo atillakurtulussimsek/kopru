@@ -14,6 +14,7 @@ import (
 const (
 	tunAddr   = "198.18.0.1"
 	scutilKey = "State:/Network/Service/net.vd.kopru/DNS"
+	scutilIP4 = "State:/Network/Service/net.vd.kopru/IPv4"
 	stateFile = "/var/run/kopru.json"
 )
 
@@ -47,19 +48,30 @@ func setupNetwork(st *netState) error {
 			return err
 		}
 	}
-	if err := setDNS(st.DNS); err != nil {
+	if err := setDNS(st.Iface, st.DNS); err != nil {
 		return err
 	}
 	return saveState(st)
 }
 
-func setDNS(servers []string) error {
+// setDNS, Köprü'yü macOS'a bir ağ servisi olarak tanıtır (IPv4 + DNS).
+// IPv4 kaydı olmadan, Wi-Fi kapalıyken macOS "ağ yok" sanar ve Firefox/Zen
+// gibi tarayıcılar kendini çevrimdışı moda alır.
+func setDNS(iface string, servers []string) error {
 	script := fmt.Sprintf(`d.init
-d.add ServerAddresses * %s
+d.add Addresses * %[1]s
+d.add DestAddresses * %[1]s
+d.add SubnetMasks * 255.255.255.255
+d.add InterfaceName %[2]s
+d.add ConfirmedInterfaceName %[2]s
+d.add Router %[1]s
+set %[3]s
+d.init
+d.add ServerAddresses * %[4]s
 d.add SupplementalMatchDomains * ""
-set %s
+set %[5]s
 quit
-`, strings.Join(servers, " "), scutilKey)
+`, tunAddr, iface, scutilIP4, strings.Join(servers, " "), scutilKey)
 	cmd := exec.Command("scutil")
 	cmd.Stdin = strings.NewReader(script)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -79,7 +91,7 @@ func teardownNetwork(st *netState) {
 		sh("route", "-n", "delete", "-net", r)
 	}
 	cmd := exec.Command("scutil")
-	cmd.Stdin = strings.NewReader(fmt.Sprintf("remove %s\nquit\n", scutilKey))
+	cmd.Stdin = strings.NewReader(fmt.Sprintf("remove %s\nremove %s\nquit\n", scutilKey, scutilIP4))
 	cmd.Run()
 	flushDNS()
 	os.Remove(stateFile)

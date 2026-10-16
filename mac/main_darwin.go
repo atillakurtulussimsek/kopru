@@ -18,7 +18,7 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/tunnel/statistic"
 )
 
-var version = "0.1.0"
+var version = "0.1.1"
 
 func main() {
 	port := flag.Int("port", 28080, "telefondaki Köprü sunucusunun portu")
