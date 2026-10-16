@@ -1,0 +1,67 @@
+name: Derleme
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew && ./gradlew --no-daemon assembleRelease
+      - run: mv app/build/outputs/apk/release/app-release.apk kopru.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kopru-android
+          path: android/kopru.apk
+
+  macos:
+    name: macOS istemcisi
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: mac/go.mod
+          cache-dependency-path: mac/go.sum
+      - run: go vet ./... && go test ./...
+      - run: make
+      - run: cd ../dist && zip kopru-macos.zip kopru
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kopru-macos
+          path: dist/kopru-macos.zip
+
+  release:
+    name: Sürüm yayınla
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            kopru.apk
+            kopru-macos.zip
