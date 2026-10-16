@@ -25,8 +25,8 @@ func findADB(custom string) (string, error) {
 		return p, nil
 	}
 	home := os.Getenv("HOME")
-	if su := os.Getenv("SUDO_USER"); su != "" {
-		home = filepath.Join("/Users", su)
+	if u := invokingUser(); u != "" {
+		home = filepath.Join("/Users", u)
 	}
 	candidates := []string{
 		"/opt/homebrew/bin/adb",
@@ -107,11 +107,27 @@ func (a *ADB) StartApp(port int) {
 
 // adbCmd, sudo ile çalışırken adb'yi asıl kullanıcı adına çalıştırır;
 // aksi halde adb sunucusu root anahtarıyla açılır ve telefon yeniden yetki ister.
+// Arka plan servisinde (sudo yok) Mac'e giriş yapmış kullanıcı kullanılır.
 func (a *ADB) adbCmd(args ...string) *exec.Cmd {
 	if os.Geteuid() == 0 {
-		if u := os.Getenv("SUDO_USER"); u != "" && u != "root" {
+		if u := invokingUser(); u != "" {
 			return exec.Command("sudo", append([]string{"-u", u, "-H", a.Path}, args...)...)
 		}
 	}
 	return exec.Command(a.Path, args...)
+}
+
+func invokingUser() string {
+	if u := os.Getenv("SUDO_USER"); u != "" && u != "root" {
+		return u
+	}
+	out, err := exec.Command("stat", "-f", "%Su", "/dev/console").Output()
+	if err != nil {
+		return ""
+	}
+	u := strings.TrimSpace(string(out))
+	if u == "" || u == "root" || u == "loginwindow" || u == "_mbsetupuser" {
+		return ""
+	}
+	return u
 }

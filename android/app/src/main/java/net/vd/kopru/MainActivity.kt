@@ -93,7 +93,7 @@ class MainActivity : Activity() {
         if (s == null) {
             toggle.text = "Başlat"
             status.text = ProxyService.lastError ?: "Durduruldu"
-            stats.text = "Mac'te terminalden çalıştırın:\nsudo kopru"
+            stats.text = "Mac'te Köprü servisi kuruluysa Başlat'a basmanız yeterli.\nKurulu değilse terminalde: sudo kopru"
             return
         }
         toggle.text = "Durdur"

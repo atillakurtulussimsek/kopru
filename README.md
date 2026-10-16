@@ -33,7 +33,20 @@ sudo ./kopru
 ```
 İlk bağlantıda telefonda çıkan **"USB hata ayıklamaya izin ver"** sorusunu onaylayın ("Her zaman izin ver" işaretli olsun). Program telefondaki uygulamayı kendisi açar ve başlatır.
 
-Kapatmak için `Ctrl+C`. Program beklenmedik biçimde kapanırsa `sudo ./kopru cleanup` rota ve DNS ayarlarını geri alır. Bir sonraki çalıştırmada bu temizlik otomatik olarak da yapılır.
+### 3. Arka plan servisi (önerilen)
+Terminal açık tutmadan, Dock'ta görünmeden çalışması için:
+```bash
+sudo ./kopru install
+```
+Servis Mac açıldığında kendiliğinden başlar. Paylaşımı telefondan yönetirsiniz:
+- Köprü uygulamasında **Başlat** → Mac internete telefondan çıkar.
+- **Durdur**'a basmak ya da kabloyu çıkarmak → ~8 saniye içinde Mac kendi Wi-Fi'sine döner.
+
+Telefonu sadece şarj için taktığınızda mobil veri harcanmaz; paylaşım yalnız uygulamada Başlat'a basınca açılır.
+
+`kopru status` durumu gösterir, günlük `/var/log/kopru.log` dosyasındadır, `sudo kopru uninstall` servisi kaldırır.
+
+Terminal modunda kapatmak için `Ctrl+C`. Program beklenmedik biçimde kapanırsa `sudo ./kopru cleanup` rota ve DNS ayarlarını geri alır. Bir sonraki çalıştırmada bu temizlik otomatik olarak da yapılır.
 
 Seçenekler: `-port`, `-dns 1.1.1.1,8.8.8.8`, `-serial` (birden fazla telefon bağlıysa), `-log debug`, `-no-adb`.
 
