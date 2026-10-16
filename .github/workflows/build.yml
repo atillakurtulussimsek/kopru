@@ -19,7 +19,7 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -53,15 +53,32 @@ jobs:
 
   release:
     name: Sürüm yayınla
-    if: startsWith(github.ref, 'refs/tags/v')
+    # main'e her push'ta android/app/build.gradle.kts içindeki versionName ile
+    # (ör. v0.1.0) bir sürüm oluşturulur ya da mevcut sürümün dosyaları güncellenir.
+    if: github.event_name == 'push'
     needs: [android, macos]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            v=$(grep -oP 'versionName = "\K[^"]+' android/app/build.gradle.kts)
+            echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Köprü ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Android uygulaması (`kopru.apk`) ve macOS istemcisi (`kopru-macos.zip`, Intel + Apple Silicon).
+            Kurulum adımları için README'ye bakın.
           files: |
             kopru.apk
             kopru-macos.zip
