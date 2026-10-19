@@ -47,6 +47,9 @@ func install(o *options) {
 	if o.serial != "" {
 		args = append(args, "-serial", o.serial)
 	}
+	if o.always {
+		args = append(args, "-always")
+	}
 	var argXML strings.Builder
 	for _, a := range args {
 		fmt.Fprintf(&argXML, "\t\t<string>%s</string>\n", xmlEscape(a))
@@ -90,8 +93,9 @@ func install(o *options) {
 	fmt.Printf(`✓ Köprü arka plan servisi kuruldu ve çalışıyor.
 
   • Mac açıldığında kendiliğinden başlar, Dock'ta görünmez.
-  • Paylaşımı telefondan yönetin: Köprü uygulamasında "Başlat" → Mac internete
-    telefondan çıkar; "Durdur" ya da kabloyu çıkarmak → Mac kendi ağına döner.
+  • Mac Wi-Fi'ye bağlıyken Köprü devreye girmez. Wi-Fi yoksa ve telefondaki
+    Köprü uygulamasında "Başlat"a basılmışsa internet telefondan gelir.
+  • Wi-Fi geri gelince, "Durdur"a basınca ya da kablo çıkınca Mac kendi ağına döner.
   • Durum:    kopru status
   • Günlük:   %s
   • Kaldırma: sudo kopru uninstall

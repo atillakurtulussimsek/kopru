@@ -106,6 +106,11 @@ func saveState(st *netState) error {
 func cleanupStale() bool {
 	b, err := os.ReadFile(stateFile)
 	if err != nil {
+		// Durum dosyası yok ama scutil'de kayıt kalmış olabilir (zorla kapatılma).
+		if strings.Contains(scutilRun("list State:/Network/Service/net.vd.kopru/.*\n"), "net.vd.kopru") {
+			teardownNetwork(&netState{})
+			return true
+		}
 		return false
 	}
 	var st netState
@@ -118,4 +123,44 @@ func cleanupStale() bool {
 		(&ADB{Path: st.ADB}).RemoveForward(st.Port)
 	}
 	return true
+}
+
+func scutilRun(script string) string {
+	cmd := exec.Command("scutil")
+	cmd.Stdin = strings.NewReader(script + "quit\n")
+	out, _ := cmd.Output()
+	return string(out)
+}
+
+// otherNetwork, Köprü dışında internete çıkabilen bir ağ servisi (Wi-Fi,
+// Ethernet, iPhone hotspot…) varsa arayüz adını döndürür.
+func otherNetwork() string {
+	keys := scutilRun("list State:/Network/Service/[^/]+/IPv4\n")
+	for _, line := range strings.Split(keys, "\n") {
+		i := strings.Index(line, "State:/Network/Service/")
+		if i < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[i:])
+		if strings.Contains(key, "net.vd.kopru") {
+			continue
+		}
+		var iface, router string
+		for _, l := range strings.Split(scutilRun("show "+key+"\n"), "\n") {
+			k, v, ok := strings.Cut(strings.TrimSpace(l), " : ")
+			if !ok {
+				continue
+			}
+			switch k {
+			case "InterfaceName":
+				iface = v
+			case "Router":
+				router = v
+			}
+		}
+		if router != "" && iface != "" && !strings.HasPrefix(iface, "utun") {
+			return iface
+		}
+	}
+	return ""
 }

@@ -111,10 +111,12 @@ func (a *ADB) StartApp(port int) {
 func (a *ADB) adbCmd(args ...string) *exec.Cmd {
 	if os.Geteuid() == 0 {
 		if u := invokingUser(); u != "" {
-			return exec.Command("sudo", append([]string{"-u", u, "-H", a.Path}, args...)...)
+			return exec.Command("sudo", append([]string{"-u", u, "-H", "env", "ADB_MDNS=0", a.Path}, args...)...)
 		}
 	}
-	return exec.Command(a.Path, args...)
+	cmd := exec.Command(a.Path, args...)
+	cmd.Env = append(os.Environ(), "ADB_MDNS=0") // Wi-Fi'de mDNS taraması yapmasın
+	return cmd
 }
 
 func invokingUser() string {

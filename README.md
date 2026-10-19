@@ -38,9 +38,11 @@ Terminal açık tutmadan, Dock'ta görünmeden çalışması için:
 ```bash
 sudo ./kopru install
 ```
-Servis Mac açıldığında kendiliğinden başlar. Paylaşımı telefondan yönetirsiniz:
+Servis Mac açıldığında kendiliğinden başlar. **Wi-Fi (ya da başka bir bağlantı) varken devreye girmez.** Wi-Fi yokken:
 - Köprü uygulamasında **Başlat** → Mac internete telefondan çıkar.
-- **Durdur**'a basmak ya da kabloyu çıkarmak → ~8 saniye içinde Mac kendi Wi-Fi'sine döner.
+- **Durdur**, kabloyu çıkarmak ya da Wi-Fi'nin geri gelmesi → Mac birkaç saniye içinde kendi ağına döner.
+
+Wi-Fi bağlıyken de telefonu kullanmak isterseniz: `sudo kopru install -always`.
 
 Telefonu sadece şarj için taktığınızda mobil veri harcanmaz; paylaşım yalnız uygulamada Başlat'a basınca açılır.
 

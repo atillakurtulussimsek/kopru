@@ -20,7 +20,7 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/tunnel/statistic"
 )
 
-var version = "0.2.0"
+var version = "0.2.1"
 
 type options struct {
 	port     int
@@ -30,6 +30,7 @@ type options struct {
 	mtu      int
 	logLevel string
 	noADB    bool
+	always   bool
 	daemon   bool
 }
 
@@ -58,6 +59,7 @@ func parseOptions(args []string) *options {
 	fs.IntVar(&o.mtu, "mtu", 1500, "TUN arayüzü MTU")
 	fs.StringVar(&o.logLevel, "log", "warn", "günlük seviyesi: debug, info, warn, error, silent")
 	fs.BoolVar(&o.noADB, "no-adb", false, "adb kullanma (port yönlendirmesi elle yapılmışsa)")
+	fs.BoolVar(&o.always, "always", false, "servis modunda Wi-Fi bağlıyken de telefonu kullan")
 	fs.Usage = func() { usage(); fs.PrintDefaults() }
 	fs.Parse(args)
 	o.dns = splitList(dns)
@@ -223,6 +225,11 @@ func waitForServer(ctx context.Context, o *options, adb *ADB, d *KopruDialer, fi
 					startedApp = true
 				}
 				if d.Ping(2*time.Second) == nil {
+					if iface := blockingNetwork(o); iface != "" {
+						tell(fmt.Sprintf("Telefon hazır ama Mac %s üzerinden bağlı; Köprü devreye girmiyor.", iface))
+						writeStatus("beklemede ("+iface+" bağlı)", "", "")
+						break
+					}
 					return true
 				}
 				if o.daemon {
@@ -231,7 +238,7 @@ func waitForServer(ctx context.Context, o *options, adb *ADB, d *KopruDialer, fi
 					tell("Telefondaki Köprü sunucusu bekleniyor (uygulamada \"Başlat\"a basın)…")
 				}
 			}
-		} else if d.Ping(2*time.Second) == nil {
+		} else if d.Ping(2*time.Second) == nil && blockingNetwork(o) == "" {
 			return true
 		} else {
 			tell(fmt.Sprintf("127.0.0.1:%d üzerinde sunucu bekleniyor…", o.port))
@@ -275,16 +282,24 @@ func session(ctx context.Context, o *options, adb *ADB, d *KopruDialer) error {
 	}
 	writeStatus("bağlı", st.Iface, "")
 
-	tick := time.NewTicker(2 * time.Second)
+	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	var lostAt time.Time
+	n := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-tick.C:
 		}
-		if err := d.Ping(2 * time.Second); err != nil {
+		n++
+		if n%5 == 0 {
+			if iface := blockingNetwork(o); iface != "" {
+				o.say("Mac %s ağına bağlandı; Köprü devreden çıktı.", iface)
+				return nil
+			}
+		}
+		if err := d.Ping(1500 * time.Millisecond); err != nil {
 			if lostAt.IsZero() {
 				lostAt = time.Now()
 				if !o.daemon {
@@ -296,8 +311,13 @@ func session(ctx context.Context, o *options, adb *ADB, d *KopruDialer) error {
 					adb.Forward(o.port)
 				}
 			}
-			// Kısa kopmalarda tüneli koru; uzun sürerse Mac'i kendi ağına bırak.
-			if time.Since(lostAt) > 8*time.Second {
+			// Telefon sunucusu kapandıysa (bağlantı reddedildi) hemen, diğer
+			// hatalarda kısa bir süre bekleyip Mac'i kendi ağına bırak.
+			limit := 3 * time.Second
+			if strings.Contains(err.Error(), "refused") {
+				limit = 0
+			}
+			if time.Since(lostAt) >= limit {
 				o.say("Telefon bağlantısı kesildi; ağ ayarları geri alındı, yeniden bekleniyor.")
 				return nil
 			}
@@ -364,6 +384,15 @@ func printStatus() {
 	if installed {
 		fmt.Printf("Günlük: %s\n", logPath)
 	}
+}
+
+// blockingNetwork, servis modunda Köprü'nün devreye girmesini engelleyen
+// başka bir bağlantı (Wi-Fi vb.) varsa adını döndürür.
+func blockingNetwork(o *options) string {
+	if !o.daemon || o.always {
+		return ""
+	}
+	return otherNetwork()
 }
 
 // --- yardımcılar ---
