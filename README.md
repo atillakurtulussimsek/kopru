@@ -34,19 +34,25 @@ sudo ./kopru
 İlk bağlantıda telefonda çıkan **"USB hata ayıklamaya izin ver"** sorusunu onaylayın ("Her zaman izin ver" işaretli olsun). Program telefondaki uygulamayı kendisi açar ve başlatır.
 
 ### 3. Arka plan servisi (önerilen)
-Terminal açık tutmadan, Dock'ta görünmeden çalışması için:
+Terminal açık tutmadan, Dock'ta görünmeden çalışması için bir kez kurun:
 ```bash
 sudo ./kopru install
 ```
-Servis Mac açıldığında kendiliğinden başlar. **Wi-Fi (ya da başka bir bağlantı) varken devreye girmez.** Wi-Fi yokken:
+Sonrasında istediğiniz zaman açıp kapatın (şifre sormaz):
+```bash
+kopru on       # aç
+kopru off      # kapat — Mac hemen kendi ağına döner
+kopru status   # durum
+```
+Mac yeniden başlayınca Köprü **kapalı** başlar.
+
+Açıkken **Wi-Fi (ya da başka bir bağlantı) varsa devreye girmez.** Wi-Fi yokken:
 - Köprü uygulamasında **Başlat** → Mac internete telefondan çıkar.
 - **Durdur**, kabloyu çıkarmak ya da Wi-Fi'nin geri gelmesi → Mac birkaç saniye içinde kendi ağına döner.
 
 Wi-Fi bağlıyken de telefonu kullanmak isterseniz: `sudo kopru install -always`.
 
-Telefonu sadece şarj için taktığınızda mobil veri harcanmaz; paylaşım yalnız uygulamada Başlat'a basınca açılır.
-
-`kopru status` durumu gösterir, günlük `/var/log/kopru.log` dosyasındadır, `sudo kopru uninstall` servisi kaldırır.
+Günlük `/var/log/kopru.log` dosyasındadır, `sudo kopru uninstall` her şeyi kaldırır.
 
 Terminal modunda kapatmak için `Ctrl+C`. Program beklenmedik biçimde kapanırsa `sudo ./kopru cleanup` rota ve DNS ayarlarını geri alır. Bir sonraki çalıştırmada bu temizlik otomatik olarak da yapılır.
 

@@ -93,7 +93,10 @@ func teardownNetwork(st *netState) {
 	cmd := exec.Command("scutil")
 	cmd.Stdin = strings.NewReader(fmt.Sprintf("remove %s\nremove %s\nquit\n", scutilKey, scutilIP4))
 	cmd.Run()
-	flushDNS()
+	// Yalnız önbellek temizliği (HUP) yetmiyor: mDNSResponder Wi-Fi'nin DNS'ine
+	// geçemeyip takılı kalabiliyor. Tamamen yeniden başlat (launchd hemen açar).
+	sh("dscacheutil", "-flushcache")
+	sh("killall", "mDNSResponder")
 	os.Remove(stateFile)
 }
 

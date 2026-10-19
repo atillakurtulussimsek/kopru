@@ -20,7 +20,7 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/tunnel/statistic"
 )
 
-var version = "0.2.1"
+var version = "0.3.0"
 
 type options struct {
 	port     int
@@ -38,10 +38,12 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `Köprü %s — Android telefonun mobil verisini USB ile Mac'e paylaşır
 
 Kullanım:
+  sudo ./kopru install    Kur ve aç (arka planda çalışır, Dock'ta görünmez)
+  kopru on                Aç
+  kopru off               Kapat (Mac hemen kendi ağına döner)
+  kopru status            Durumu göster
+  sudo kopru uninstall    Kaldır
   sudo kopru              Terminalde çalıştır (Ctrl+C ile çık)
-  sudo kopru install      Arka plan servisi olarak kur (açılışta başlar, Dock'ta görünmez)
-  sudo kopru uninstall    Arka plan servisini kaldır
-  kopru status            Servisin durumunu göster
   sudo kopru cleanup      Çökme sonrası kalan ağ ayarlarını geri al
 
 Seçenekler:
@@ -77,7 +79,7 @@ func main() {
 	case "status":
 		printStatus()
 		return
-	case "", "daemon", "install", "uninstall", "cleanup":
+	case "", "daemon", "install", "uninstall", "cleanup", "on", "off":
 	default:
 		usage()
 		os.Exit(2)
@@ -94,6 +96,14 @@ func main() {
 		}
 	case "install":
 		install(o)
+	case "on":
+		serviceOn()
+	case "off":
+		if serviceOff() {
+			fmt.Println("✓ Köprü kapatıldı.")
+		} else {
+			fmt.Println("Köprü zaten kapalı.")
+		}
 	case "uninstall":
 		uninstall()
 	case "daemon":
@@ -111,7 +121,6 @@ func requireRoot() {
 	// TUN arayüzü ve rota ayarı root ister; kendimizi sudo ile yeniden çalıştır.
 	self, _ := os.Executable()
 	args := append([]string{"sudo", self}, os.Args[1:]...)
-	fmt.Println("Yönetici yetkisi gerekiyor, sudo ile yeniden başlatılıyor…")
 	if err := syscall.Exec("/usr/bin/sudo", args, os.Environ()); err != nil {
 		fatal("sudo çalıştırılamadı: %v", err)
 	}
@@ -367,12 +376,23 @@ func writeStatusFull(s statusInfo) {
 
 func printStatus() {
 	installed := fileExists(plistPath)
+	running := installed && serviceRunning()
 	b, err := os.ReadFile(statusFile)
 	var s statusInfo
-	if err != nil || json.Unmarshal(b, &s) != nil || time.Since(s.Updated) > 2*time.Minute && s.State == "bağlı" {
-		s = statusInfo{State: "çalışmıyor"}
+	if !running || err != nil || json.Unmarshal(b, &s) != nil {
+		s = statusInfo{State: "-"}
 	}
-	fmt.Printf("Servis: %s\n", map[bool]string{true: "kurulu", false: "kurulu değil"}[installed])
+	switch {
+	case !installed:
+		fmt.Println("Köprü:  kurulu değil (sudo ./kopru install)")
+	case !running:
+		fmt.Println("Köprü:  kapalı (açmak için: kopru on)")
+	default:
+		fmt.Println("Köprü:  açık (kapatmak için: kopru off)")
+	}
+	if !running {
+		return
+	}
 	fmt.Printf("Durum:  %s\n", s.State)
 	if s.State == "bağlı" {
 		fmt.Printf("Arayüz: %s, %s süredir\n", s.Iface, time.Since(s.Since).Round(time.Second))

@@ -14,9 +14,13 @@ import (
 
 const (
 	serviceLabel = "net.vd.kopru"
-	plistPath    = "/Library/LaunchDaemons/" + serviceLabel + ".plist"
+	// Plist bilerek /Library/LaunchDaemons dışında: launchd açılışta kendiliğinden
+	// yüklemez, servis yalnız "kopru on" ile çalışır.
+	plistPath    = "/usr/local/share/kopru/" + serviceLabel + ".plist"
+	oldPlistPath = "/Library/LaunchDaemons/" + serviceLabel + ".plist" // v0.2.x
 	installBin   = "/usr/local/bin/kopru"
 	logPath      = "/var/log/kopru.log"
+	sudoersPath  = "/etc/sudoers.d/kopru"
 )
 
 // install, Köprü'yü launchd servisi olarak kurar: açılışta başlar, Dock'ta
@@ -33,8 +37,8 @@ func install(o *options) {
 	self, _ = filepath.EvalSymlinks(self)
 
 	// Eski servis varsa durdur (ikili dosyayı değiştirebilmek için).
-	exec.Command("launchctl", "bootout", "system/"+serviceLabel).Run()
-	time.Sleep(500 * time.Millisecond)
+	serviceOff()
+	os.Remove(oldPlistPath)
 
 	if self != installBin {
 		if err := copyFile(self, installBin); err != nil {
@@ -84,29 +88,76 @@ func install(o *options) {
 </plist>
 `, serviceLabel, argXML.String(), logPath, logPath)
 
+	os.MkdirAll(filepath.Dir(plistPath), 0o755)
 	if err := os.WriteFile(plistPath, []byte(plist), 0o644); err != nil {
 		fatal("%s yazılamadı: %v", plistPath, err)
+	}
+	installSudoers()
+	fmt.Println("✓ Köprü kuruldu.")
+	serviceOn()
+	fmt.Printf(`
+  kopru on       Aç   (Dock'ta görünmez, arka planda çalışır)
+  kopru off      Kapat
+  kopru status   Durum
+  Günlük:        %s
+  Kaldırma:      sudo kopru uninstall
+
+Mac yeniden başlayınca Köprü kapalı başlar; istediğinizde "kopru on" ile açın.
+`, logPath)
+}
+
+// installSudoers, yönetici kullanıcıların yalnız "kopru on/off" komutlarını
+// şifresiz çalıştırmasına izin verir.
+func installSudoers() {
+	rule := fmt.Sprintf("# Köprü: şifresiz aç/kapat\n%%admin ALL=(root) NOPASSWD: %[1]s on, %[1]s off\n", installBin)
+	tmp := sudoersPath + ".tmp"
+	if os.WriteFile(tmp, []byte(rule), 0o440) != nil {
+		return
+	}
+	if exec.Command("visudo", "-cf", tmp).Run() != nil {
+		os.Remove(tmp)
+		return
+	}
+	os.Rename(tmp, sudoersPath)
+}
+
+func serviceRunning() bool {
+	return exec.Command("launchctl", "print", "system/"+serviceLabel).Run() == nil
+}
+
+func serviceOn() {
+	if !fileExists(plistPath) {
+		fatal("Köprü kurulu değil. Önce: sudo ./kopru install")
+	}
+	if serviceRunning() {
+		fmt.Println("Köprü zaten açık.")
+		return
 	}
 	if out, err := exec.Command("launchctl", "bootstrap", "system", plistPath).CombinedOutput(); err != nil {
 		fatal("servis başlatılamadı: %v %s", err, out)
 	}
-	fmt.Printf(`✓ Köprü arka plan servisi kuruldu ve çalışıyor.
+	fmt.Println("✓ Köprü açıldı. Wi-Fi yokken telefondaki uygulamada \"Başlat\"a basınca internet telefondan gelir.")
+}
 
-  • Mac açıldığında kendiliğinden başlar, Dock'ta görünmez.
-  • Mac Wi-Fi'ye bağlıyken Köprü devreye girmez. Wi-Fi yoksa ve telefondaki
-    Köprü uygulamasında "Başlat"a basılmışsa internet telefondan gelir.
-  • Wi-Fi geri gelince, "Durdur"a basınca ya da kablo çıkınca Mac kendi ağına döner.
-  • Durum:    kopru status
-  • Günlük:   %s
-  • Kaldırma: sudo kopru uninstall
-`, logPath)
+func serviceOff() bool {
+	if !serviceRunning() {
+		return false
+	}
+	// bootout SIGTERM gönderir; servis ağ ayarlarını geri alıp kapanır.
+	exec.Command("launchctl", "bootout", "system/"+serviceLabel).Run()
+	for i := 0; i < 20 && serviceRunning(); i++ {
+		time.Sleep(250 * time.Millisecond)
+	}
+	cleanupStale()
+	os.Remove(statusFile)
+	return true
 }
 
 func uninstall() {
+	serviceOff()
 	exec.Command("launchctl", "bootout", "system/"+serviceLabel).Run()
-	time.Sleep(time.Second)
 	removed := false
-	for _, p := range []string{plistPath, installBin, statusFile} {
+	for _, p := range []string{plistPath, oldPlistPath, installBin, statusFile, sudoersPath} {
 		if os.Remove(p) == nil {
 			removed = true
 		}
